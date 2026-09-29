@@ -1,0 +1,857 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>15×15 生存遊戲</title>
+
+<style>
+    * {
+        box-sizing: border-box;
+    }
+
+    body {
+        margin: 0;
+        min-height: 100vh;
+        background: #111827;
+        color: white;
+        font-family: Arial, "Microsoft JhengHei", sans-serif;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+    }
+
+    .game-container {
+        text-align: center;
+        padding: 20px;
+    }
+
+    h1 {
+        margin: 0 0 10px;
+        font-size: 28px;
+    }
+
+    .info {
+        display: flex;
+        justify-content: center;
+        gap: 30px;
+        margin-bottom: 15px;
+        font-size: 18px;
+    }
+
+    .score {
+        font-weight: bold;
+    }
+
+    /* =========================
+       15 × 15 固定大小棋盤
+       每一格 40 × 40 px
+       ========================= */
+    .board {
+        display: grid;
+
+        grid-template-columns: repeat(15, 40px);
+        grid-template-rows: repeat(15, 40px);
+
+        width: 600px;
+        height: 600px;
+
+        margin: 0 auto;
+
+        border: 3px solid white;
+        background: #1f2937;
+    }
+
+    /* 每一格固定 40 × 40 px */
+    .cell {
+        width: 40px;
+        height: 40px;
+
+        display: flex;
+        align-items: center;
+        justify-content: center;
+
+        border: 1px solid #374151;
+
+        font-size: 25px;
+        user-select: none;
+    }
+
+    .player {
+        background: #2563eb;
+    }
+
+    .rock {
+        background: #4b5563;
+    }
+
+    .monster {
+        background: #7f1d1d;
+    }
+
+    .controls {
+        margin-top: 20px;
+    }
+
+    button {
+        font-size: 18px;
+        padding: 10px 18px;
+        margin: 5px;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+    }
+
+    button:hover {
+        opacity: 0.85;
+    }
+
+    .direction-buttons {
+        width: 180px;
+        margin: 10px auto;
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 5px;
+    }
+
+    .direction-buttons button {
+        width: 55px;
+        height: 45px;
+        padding: 0;
+        margin: 0;
+    }
+
+    .empty {
+        visibility: hidden;
+    }
+
+    .game-over {
+        position: fixed;
+        inset: 0;
+
+        background: rgba(0, 0, 0, 0.75);
+
+        display: none;
+        justify-content: center;
+        align-items: center;
+
+        z-index: 10;
+    }
+
+    .game-over-box {
+        background: #1f2937;
+        padding: 35px;
+        border-radius: 15px;
+        text-align: center;
+    }
+
+    .game-over-box h2 {
+        font-size: 32px;
+        margin-top: 0;
+    }
+
+    .reason {
+        font-size: 18px;
+        margin-bottom: 20px;
+    }
+
+    /* =========================
+       小螢幕：棋盤仍然維持固定格子
+       可以左右滑動
+       ========================= */
+    .board-wrapper {
+        width: 100%;
+        overflow-x: auto;
+        padding-bottom: 5px;
+    }
+
+</style>
+</head>
+
+<body>
+
+<div class="game-container">
+
+    <h1>🎮 15 × 15 生存遊戲</h1>
+
+    <div class="info">
+        <div class="score">
+            分數：<span id="score">20902</span>
+        </div>
+
+        <div>
+            步數：<span id="steps">0</span>
+        </div>
+    </div>
+
+    <div class="board-wrapper">
+        <div class="board" id="board"></div>
+    </div>
+
+    <div class="controls">
+
+        <div class="direction-buttons">
+
+            <button class="empty"></button>
+
+            <button onclick="movePlayer(0, -1)">
+                ↑
+            </button>
+
+            <button class="empty"></button>
+
+            <button onclick="movePlayer(-1, 0)">
+                ←
+            </button>
+
+            <button onclick="movePlayer(0, 1)">
+                ↓
+            </button>
+
+            <button onclick="movePlayer(1, 0)">
+                →
+            </button>
+
+        </div>
+
+        <button onclick="togglePause()" id="pauseButton">
+            ⏸️ 暫停
+        </button>
+
+        <button onclick="restartGame()">
+            🔄 重新開始
+        </button>
+
+    </div>
+
+</div>
+
+
+<!-- 遊戲結束畫面 -->
+
+<div class="game-over" id="gameOver">
+
+    <div class="game-over-box">
+
+        <h2>💀 遊戲結束</h2>
+
+        <div class="reason" id="gameOverReason">
+            你死亡了！
+        </div>
+
+        <div>
+            最終分數：
+            <strong id="finalScore">20902</strong>
+        </div>
+
+        <br>
+
+        <button onclick="restartGame()">
+            🔄 再玩一次
+        </button>
+
+    </div>
+
+</div>
+
+
+<script>
+
+/* =========================
+   遊戲設定
+   ========================= */
+
+const SIZE = 15;
+
+const START_SCORE = 20902;
+
+const ROCK_COUNT = 3;
+
+const MONSTER_COUNT = 3;
+
+
+/* =========================
+   遊戲變數
+   ========================= */
+
+let player = {
+    x: 7,
+    y: 7
+};
+
+let rocks = [];
+
+let monsters = [];
+
+let score = START_SCORE;
+
+let steps = 0;
+
+let gameOver = false;
+
+let paused = false;
+
+
+/* =========================
+   建立棋盤
+   ========================= */
+
+function createBoard() {
+
+    const board = document.getElementById("board");
+
+    board.innerHTML = "";
+
+    for (let y = 0; y < SIZE; y++) {
+
+        for (let x = 0; x < SIZE; x++) {
+
+            const cell = document.createElement("div");
+
+            cell.className = "cell";
+
+            cell.id = `cell-${x}-${y}`;
+
+            board.appendChild(cell);
+
+        }
+
+    }
+
+}
+
+
+/* =========================
+   檢查位置是否相同
+   ========================= */
+
+function samePosition(a, b) {
+
+    return a.x === b.x && a.y === b.y;
+
+}
+
+
+/* =========================
+   檢查位置是否已經被使用
+   ========================= */
+
+function positionOccupied(x, y) {
+
+    if (player.x === x && player.y === y) {
+        return true;
+    }
+
+    for (const rock of rocks) {
+
+        if (rock.x === x && rock.y === y) {
+            return true;
+        }
+
+    }
+
+    for (const monster of monsters) {
+
+        if (monster.x === x && monster.y === y) {
+            return true;
+        }
+
+    }
+
+    return false;
+
+}
+
+
+/* =========================
+   隨機產生位置
+   ========================= */
+
+function randomPosition() {
+
+    let position;
+
+    do {
+
+        position = {
+            x: Math.floor(Math.random() * SIZE),
+            y: Math.floor(Math.random() * SIZE)
+        };
+
+    } while (
+        positionOccupied(position.x, position.y)
+    );
+
+    return position;
+
+}
+
+
+/* =========================
+   初始化遊戲
+   ========================= */
+
+function initGame() {
+
+    player = {
+        x: 7,
+        y: 7
+    };
+
+    rocks = [];
+
+    monsters = [];
+
+    score = START_SCORE;
+
+    steps = 0;
+
+    gameOver = false;
+
+    paused = false;
+
+    document.getElementById("gameOver").style.display = "none";
+
+    document.getElementById("pauseButton").textContent = "⏸️ 暫停";
+
+
+    /* 產生 3 顆石頭 */
+
+    for (let i = 0; i < ROCK_COUNT; i++) {
+
+        rocks.push(randomPosition());
+
+    }
+
+
+    /* 產生 3 隻怪物 */
+
+    for (let i = 0; i < MONSTER_COUNT; i++) {
+
+        monsters.push(randomPosition());
+
+    }
+
+
+    updateScreen();
+
+}
+
+
+/* =========================
+   更新畫面
+   ========================= */
+
+function updateScreen() {
+
+    /* 更新分數 */
+
+    document.getElementById("score").textContent = score;
+
+    document.getElementById("steps").textContent = steps;
+
+
+    /* 清空所有格子 */
+
+    for (let y = 0; y < SIZE; y++) {
+
+        for (let x = 0; x < SIZE; x++) {
+
+            const cell =
+                document.getElementById(`cell-${x}-${y}`);
+
+            cell.textContent = "";
+
+            cell.className = "cell";
+
+        }
+
+    }
+
+
+    /* 顯示石頭 */
+
+    for (const rock of rocks) {
+
+        const cell =
+            document.getElementById(
+                `cell-${rock.x}-${rock.y}`
+            );
+
+        cell.textContent = "🪨";
+
+        cell.classList.add("rock");
+
+    }
+
+
+    /* 顯示怪物 */
+
+    for (const monster of monsters) {
+
+        const cell =
+            document.getElementById(
+                `cell-${monster.x}-${monster.y}`
+            );
+
+        cell.textContent = "👾";
+
+        cell.classList.add("monster");
+
+    }
+
+
+    /* 顯示玩家 */
+
+    const playerCell =
+        document.getElementById(
+            `cell-${player.x}-${player.y}`
+        );
+
+    playerCell.textContent = "🙂";
+
+    playerCell.classList.add("player");
+
+}
+
+
+/* =========================
+   玩家移動
+   dx = 左右
+   dy = 上下
+   ========================= */
+
+function movePlayer(dx, dy) {
+
+    if (gameOver || paused) {
+        return;
+    }
+
+
+    const newX = player.x + dx;
+
+    const newY = player.y + dy;
+
+
+    /* =========================
+       碰到邊界
+       ========================= */
+
+    if (
+        newX < 0 ||
+        newX >= SIZE ||
+        newY < 0 ||
+        newY >= SIZE
+    ) {
+
+        endGame("你碰到了邊界！");
+
+        return;
+
+    }
+
+
+    /* =========================
+       碰到石頭
+       ========================= */
+
+    for (const rock of rocks) {
+
+        if (
+            rock.x === newX &&
+            rock.y === newY
+        ) {
+
+            endGame("你撞到了石頭！");
+
+            return;
+
+        }
+
+    }
+
+
+    /* =========================
+       碰到怪物
+       ========================= */
+
+    for (const monster of monsters) {
+
+        if (
+            monster.x === newX &&
+            monster.y === newY
+        ) {
+
+            endGame("你碰到了怪物！");
+
+            return;
+
+        }
+
+    }
+
+
+    /* =========================
+       移動成功
+       ========================= */
+
+    player.x = newX;
+
+    player.y = newY;
+
+    steps++;
+
+    score++;
+
+
+    /* 怪物移動 */
+
+    moveMonsters();
+
+
+    /* 檢查怪物是否撞到玩家 */
+
+    for (const monster of monsters) {
+
+        if (samePosition(monster, player)) {
+
+            endGame("怪物追上你了！");
+
+            return;
+
+        }
+
+    }
+
+
+    updateScreen();
+
+}
+
+
+/* =========================
+   怪物隨機移動
+   ========================= */
+
+function moveMonsters() {
+
+    const directions = [
+
+        { x: 0, y: -1 },
+
+        { x: 0, y: 1 },
+
+        { x: -1, y: 0 },
+
+        { x: 1, y: 0 }
+
+    ];
+
+
+    for (const monster of monsters) {
+
+        const randomDirection =
+            directions[
+                Math.floor(
+                    Math.random() * directions.length
+                )
+            ];
+
+
+        const newX =
+            monster.x + randomDirection.x;
+
+        const newY =
+            monster.y + randomDirection.y;
+
+
+        /* 怪物不能走出棋盤 */
+
+        if (
+            newX < 0 ||
+            newX >= SIZE ||
+            newY < 0 ||
+            newY >= SIZE
+        ) {
+
+            continue;
+
+        }
+
+
+        /* 怪物不能走到石頭 */
+
+        let hitRock = false;
+
+        for (const rock of rocks) {
+
+            if (
+                rock.x === newX &&
+                rock.y === newY
+            ) {
+
+                hitRock = true;
+
+                break;
+
+            }
+
+        }
+
+        if (hitRock) {
+            continue;
+        }
+
+
+        monster.x = newX;
+
+        monster.y = newY;
+
+    }
+
+}
+
+
+/* =========================
+   遊戲結束
+   ========================= */
+
+function endGame(reason) {
+
+    gameOver = true;
+
+    document.getElementById("gameOverReason")
+        .textContent = reason;
+
+    document.getElementById("finalScore")
+        .textContent = score;
+
+    document.getElementById("gameOver")
+        .style.display = "flex";
+
+}
+
+
+/* =========================
+   暫停
+   ========================= */
+
+function togglePause() {
+
+    if (gameOver) {
+        return;
+    }
+
+
+    paused = !paused;
+
+
+    const button =
+        document.getElementById("pauseButton");
+
+
+    if (paused) {
+
+        button.textContent = "▶️ 繼續";
+
+    } else {
+
+        button.textContent = "⏸️ 暫停";
+
+    }
+
+}
+
+
+/* =========================
+   重新開始
+   ========================= */
+
+function restartGame() {
+
+    initGame();
+
+}
+
+
+/* =========================
+   鍵盤控制
+   ========================= */
+
+document.addEventListener("keydown", function(event) {
+
+    if (gameOver || paused) {
+        return;
+    }
+
+
+    switch (event.key) {
+
+        case "ArrowUp":
+
+        case "w":
+
+        case "W":
+
+            movePlayer(0, -1);
+
+            event.preventDefault();
+
+            break;
+
+
+        case "ArrowDown":
+
+        case "s":
+
+        case "S":
+
+            movePlayer(0, 1);
+
+            event.preventDefault();
+
+            break;
+
+
+        case "ArrowLeft":
+
+        case "a":
+
+        case "A":
+
+            movePlayer(-1, 0);
+
+            event.preventDefault();
+
+            break;
+
+
+        case "ArrowRight":
+
+        case "d":
+
+        case "D":
+
+            movePlayer(1, 0);
+
+            event.preventDefault();
+
+            break;
+
+    }
+
+});
+
+
+/* =========================
+   開始遊戲
+   ========================= */
+
+createBoard();
+
+initGame();
+
+</script>
+
+</body>
+</html>
